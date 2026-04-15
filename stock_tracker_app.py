@@ -57,7 +57,12 @@ show_volume = st.sidebar.checkbox("Show Volume", value=True)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("💼 Portfolio")
-portfolio_shares = st.sidebar.number_input("Number of Shares Owned:", value=0, min_value=0, step=0.5)
+portfolio_shares = st.sidebar.number_input(
+    "Number of Shares Owned:",
+    value=0.0,
+    min_value=0.0,
+    step=0.5
+)
 purchase_price = st.sidebar.number_input("Purchase Price per Share (₹):", value=0.0, min_value=0.0, step=1.0)
 
 # ─────────────────────────────────────────────
