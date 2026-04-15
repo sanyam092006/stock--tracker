@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
-import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 import numpy as np
 
 st.set_page_config(page_title="Stock Market Tracker", layout="wide", initial_sidebar_state="expanded")
@@ -70,70 +69,75 @@ purchase_price = st.sidebar.number_input("Purchase Price per Share (₹):", valu
 # ─────────────────────────────────────────────
 try:
     stock_data = yf.download(stock_symbol, period=period_map[time_period], progress=False)
-    
+
+    # Fix MultiIndex columns if needed
+    if isinstance(stock_data.columns, pd.MultiIndex):
+        stock_data = stock_data[stock_symbol]
+
     if stock_data.empty:
         st.error(f"Stock symbol '{stock_symbol}' not found. Please try another symbol.")
         st.stop()
-    
+
     stock_info = yf.Ticker(stock_symbol)
-    current_price = stock_data['Close'].iloc[-1]
-    previous_close = stock_data['Close'].iloc[-2] if len(stock_data) > 1 else current_price
+
+    current_price = float(stock_data['Close'].iloc[-1])
+    previous_close = float(stock_data['Close'].iloc[-2]) if len(stock_data) > 1 else current_price
     price_change = current_price - previous_close
-    price_change_percent = (price_change / previous_close) * 100
-    
+    price_change_percent = (price_change / previous_close) * 100 if previous_close != 0 else 0
+
     # ─────────────────────────────────────────────
     #  HEADER
     # ─────────────────────────────────────────────
     st.title(f"📈 {stock_symbol} - Stock Market Tracker")
     st.markdown(f"**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         st.metric(
             "Current Price",
             f"₹{current_price:.2f}",
             delta=f"₹{price_change:.2f} ({price_change_percent:.2f}%)" if price_change != 0 else None
         )
-    
+
     with col2:
-        st.metric("Day High", f"₹{stock_data['High'].iloc[-1]:.2f}")
-    
+        st.metric("Day High", f"₹{float(stock_data['High'].iloc[-1]):.2f}")
+
     with col3:
-        st.metric("Day Low", f"₹{stock_data['Low'].iloc[-1]:.2f}")
-    
+        st.metric("Day Low", f"₹{float(stock_data['Low'].iloc[-1]):.2f}")
+
     with col4:
-        st.metric("Volume", f"{stock_data['Volume'].iloc[-1] / 1e6:.2f}M")
-    
+        st.metric("Volume", f"{float(stock_data['Volume'].iloc[-1]) / 1e6:.2f}M")
+
     # Portfolio metrics
     if portfolio_shares > 0 and purchase_price > 0:
         st.markdown("---")
         col1, col2, col3, col4 = st.columns(4)
-        
+
         portfolio_value = portfolio_shares * current_price
         portfolio_cost = portfolio_shares * purchase_price
         portfolio_gain = portfolio_value - portfolio_cost
-        portfolio_gain_percent = (portfolio_gain / portfolio_cost) * 100
-        
+        portfolio_gain_percent = (portfolio_gain / portfolio_cost) * 100 if portfolio_cost != 0 else 0
+
         with col1:
             st.metric("Portfolio Value", f"₹{portfolio_value:,.2f}")
-        
+
         with col2:
             st.metric("Total Invested", f"₹{portfolio_cost:,.2f}")
-        
+
         with col3:
             st.metric("Total Gain/Loss", f"₹{portfolio_gain:,.2f}", delta=f"{portfolio_gain_percent:.2f}%")
-        
+
         with col4:
             st.metric("Shares Owned", f"{portfolio_shares:.2f}")
-    
+
     # ─────────────────────────────────────────────
     #  PRICE CHART
     # ─────────────────────────────────────────────
     st.subheader("📊 Price Chart")
-    
+
     fig = go.Figure()
-    
+
     fig.add_trace(go.Scatter(
         x=stock_data.index,
         y=stock_data['Close'],
@@ -142,7 +146,7 @@ try:
         line=dict(color='#00e5a0', width=2),
         hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Close: ₹%{y:.2f}<extra></extra>'
     ))
-    
+
     if show_ma20 and len(stock_data) >= 20:
         ma20 = stock_data['Close'].rolling(window=20).mean()
         fig.add_trace(go.Scatter(
@@ -153,7 +157,7 @@ try:
             line=dict(color='#ffd166', width=1, dash='dash'),
             hovertemplate='<b>%{x|%Y-%m-%d}</b><br>20-Day MA: ₹%{y:.2f}<extra></extra>'
         ))
-    
+
     if show_ma50 and len(stock_data) >= 50:
         ma50 = stock_data['Close'].rolling(window=50).mean()
         fig.add_trace(go.Scatter(
@@ -164,7 +168,7 @@ try:
             line=dict(color='#3b82f6', width=1, dash='dash'),
             hovertemplate='<b>%{x|%Y-%m-%d}</b><br>50-Day MA: ₹%{y:.2f}<extra></extra>'
         ))
-    
+
     fig.update_layout(
         title=f'{stock_symbol} Price Chart - {time_period}',
         yaxis_title='Price (₹)',
@@ -178,19 +182,19 @@ try:
         xaxis=dict(gridcolor='#2a2d3a'),
         yaxis=dict(gridcolor='#2a2d3a')
     )
-    
+
     st.plotly_chart(fig, use_container_width=True)
-    
+
     # ─────────────────────────────────────────────
     #  VOLUME CHART
     # ─────────────────────────────────────────────
     if show_volume:
         st.subheader("📊 Trading Volume")
-        
-        colors = ['#00e5a0' if stock_data['Close'].iloc[i] >= stock_data['Close'].iloc[i-1] else '#ff6b6b' 
+
+        colors = ['#00e5a0' if stock_data['Close'].iloc[i] >= stock_data['Close'].iloc[i-1] else '#ff6b6b'
                   for i in range(1, len(stock_data))]
         colors = ['#00e5a0'] + colors
-        
+
         fig_volume = go.Figure()
         fig_volume.add_trace(go.Bar(
             x=stock_data.index,
@@ -199,7 +203,7 @@ try:
             name='Volume',
             hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Volume: %{y:,.0f}<extra></extra>'
         ))
-        
+
         fig_volume.update_layout(
             title=f'{stock_symbol} Trading Volume',
             yaxis_title='Volume',
@@ -213,16 +217,16 @@ try:
             yaxis=dict(gridcolor='#2a2d3a'),
             showlegend=False
         )
-        
+
         st.plotly_chart(fig_volume, use_container_width=True)
-    
+
     # ─────────────────────────────────────────────
     #  DAILY RETURNS
     # ─────────────────────────────────────────────
     st.subheader("📈 Daily Returns Distribution")
-    
+
     daily_returns = stock_data['Close'].pct_change() * 100
-    
+
     fig_returns = go.Figure()
     fig_returns.add_trace(go.Histogram(
         x=daily_returns.dropna(),
@@ -231,7 +235,7 @@ try:
         name='Daily Returns (%)',
         hovertemplate='<b>Return Range:</b> %{x:.2f}%<br><b>Frequency:</b> %{y}<extra></extra>'
     ))
-    
+
     fig_returns.update_layout(
         title=f'{stock_symbol} Daily Returns Distribution',
         xaxis_title='Daily Return (%)',
@@ -245,38 +249,26 @@ try:
         yaxis=dict(gridcolor='#2a2d3a'),
         showlegend=False
     )
-    
+
     st.plotly_chart(fig_returns, use_container_width=True)
-    
+
     # ─────────────────────────────────────────────
     #  STATISTICS TABLE
     # ─────────────────────────────────────────────
     st.subheader("📋 Stock Statistics")
-    
-    try:
-        trailing_pe = stock_info.info.get('trailingPE', 'N/A')
-        pe_str = f"{trailing_pe:.2f}" if isinstance(trailing_pe, (int, float)) else "N/A"
-    except:
-        pe_str = "N/A"
-    
-    try:
-        market_cap = stock_info.info.get('marketCap', 'N/A')
-        mc_str = f"₹{market_cap:,}" if isinstance(market_cap, (int, float)) else "N/A"
-    except:
-        mc_str = "N/A"
-    
-    try:
-        div_yield = stock_info.info.get('dividendYield', 0) * 100
-        dy_str = f"{div_yield:.2f}%"
-    except:
-        dy_str = "N/A"
-    
-    try:
-        beta = stock_info.info.get('beta', 'N/A')
-        beta_str = f"{beta:.2f}" if isinstance(beta, (int, float)) else "N/A"
-    except:
-        beta_str = "N/A"
-    
+
+    trailing_pe = stock_info.info.get('trailingPE', 'N/A')
+    pe_str = f"{trailing_pe:.2f}" if isinstance(trailing_pe, (int, float)) else "N/A"
+
+    market_cap = stock_info.info.get('marketCap', 'N/A')
+    mc_str = f"₹{market_cap:,}" if isinstance(market_cap, (int, float)) else "N/A"
+
+    div_yield = stock_info.info.get('dividendYield', 0)
+    dy_str = f"{div_yield * 100:.2f}%" if isinstance(div_yield, (int, float)) else "N/A"
+
+    beta = stock_info.info.get('beta', 'N/A')
+    beta_str = f"{beta:.2f}" if isinstance(beta, (int, float)) else "N/A"
+
     stats = {
         "Metric": [
             "Current Price",
@@ -290,52 +282,54 @@ try:
         ],
         "Value": [
             f"₹{current_price:.2f}",
-            f"₹{stock_data['High'].max():.2f}",
-            f"₹{stock_data['Low'].min():.2f}",
-            f"{stock_data['Volume'].tail(20).mean() / 1e6:.2f}M",
+            f"₹{float(stock_data['High'].max()):.2f}",
+            f"₹{float(stock_data['Low'].min()):.2f}",
+            f"{float(stock_data['Volume'].tail(20).mean()) / 1e6:.2f}M",
             pe_str,
             mc_str,
             dy_str,
             beta_str
         ]
     }
-    
+
     df_stats = pd.DataFrame(stats)
     st.dataframe(df_stats, use_container_width=True, hide_index=True)
-    
+
     # ─────────────────────────────────────────────
     #  RECENT DATA TABLE
     # ─────────────────────────────────────────────
     st.subheader("📅 Recent Price Data")
-    
+
     recent_data = stock_data.tail(10)[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
     recent_data['Daily Change %'] = daily_returns.tail(10).values
     recent_data = recent_data.round(2)
-    
+
     st.dataframe(recent_data, use_container_width=True)
-    
+
     # ─────────────────────────────────────────────
     #  COMPARISON
     # ─────────────────────────────────────────────
     st.markdown("---")
     st.subheader("🔄 Compare Multiple Stocks")
-    
+
     compare_symbols = st.multiselect(
         "Select stocks to compare (optional):",
         ["RELIANCE", "TCS", "INFY", "HDFC", "ICICIBANK", "WIPRO", "MARUTI"],
         help="Popular Indian stocks"
     )
-    
+
     if compare_symbols:
         compare_data = {}
         for symbol in compare_symbols + [stock_symbol]:
             try:
                 data = yf.download(symbol, period="1y", progress=False)
+                if isinstance(data.columns, pd.MultiIndex):
+                    data = data[symbol]
                 normalized_price = (data['Close'] / data['Close'].iloc[0]) * 100
                 compare_data[symbol] = normalized_price
             except:
                 pass
-        
+
         if compare_data:
             fig_compare = go.Figure()
             for symbol, prices in compare_data.items():
@@ -347,7 +341,7 @@ try:
                     line=dict(width=2),
                     hovertemplate='<b>%{x|%Y-%m-%d}</b><br>%{y:.2f}%<extra></extra>'
                 ))
-            
+
             fig_compare.update_layout(
                 title='Stock Performance Comparison (1 Year)',
                 yaxis_title='Normalized Price (Base = 100)',
@@ -361,7 +355,7 @@ try:
                 yaxis=dict(gridcolor='#2a2d3a'),
                 hovermode='x unified'
             )
-            
+
             st.plotly_chart(fig_compare, use_container_width=True)
 
 except Exception as e:
