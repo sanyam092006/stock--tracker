@@ -33,10 +33,8 @@ st.markdown("""
 # ─────────────────────────────────────────────
 st.sidebar.title("⚙️ Stock Tracker Settings")
 
-# Stock symbol input
 stock_symbol = st.sidebar.text_input("Enter Stock Symbol (e.g., AAPL, GOOGL, MSFT):", "AAPL").upper()
 
-# Time period selection
 time_period = st.sidebar.selectbox(
     "Select Time Period:",
     ["1 week", "1 month", "3 months", "6 months", "1 year", "5 years"]
@@ -51,14 +49,12 @@ period_map = {
     "5 years": "5y"
 }
 
-# Technical indicators
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Technical Indicators")
 show_ma20 = st.sidebar.checkbox("Show 20-Day Moving Average", value=True)
 show_ma50 = st.sidebar.checkbox("Show 50-Day Moving Average", value=True)
 show_volume = st.sidebar.checkbox("Show Volume", value=True)
 
-# Portfolio tracking
 st.sidebar.markdown("---")
 st.sidebar.subheader("💼 Portfolio")
 portfolio_shares = st.sidebar.number_input("Number of Shares Owned:", value=0, min_value=0, step=0.5)
@@ -68,14 +64,12 @@ purchase_price = st.sidebar.number_input("Purchase Price per Share (₹):", valu
 #  FETCH STOCK DATA
 # ─────────────────────────────────────────────
 try:
-    # Download stock data
     stock_data = yf.download(stock_symbol, period=period_map[time_period], progress=False)
     
     if stock_data.empty:
-        st.error(f"❌ Stock symbol '{stock_symbol}' not found. Please try another symbol.")
+        st.error(f"Stock symbol '{stock_symbol}' not found. Please try another symbol.")
         st.stop()
     
-    # Get current stock info
     stock_info = yf.Ticker(stock_symbol)
     current_price = stock_data['Close'].iloc[-1]
     previous_close = stock_data['Close'].iloc[-2] if len(stock_data) > 1 else current_price
@@ -83,12 +77,11 @@ try:
     price_change_percent = (price_change / previous_close) * 100
     
     # ─────────────────────────────────────────────
-    #  HEADER & KPI CARDS
+    #  HEADER
     # ─────────────────────────────────────────────
     st.title(f"📈 {stock_symbol} - Stock Market Tracker")
     st.markdown(f"**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # KPI Cards Row 1
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -99,22 +92,13 @@ try:
         )
     
     with col2:
-        st.metric(
-            "Day High",
-            f"₹{stock_data['High'].iloc[-1]:.2f}"
-        )
+        st.metric("Day High", f"₹{stock_data['High'].iloc[-1]:.2f}")
     
     with col3:
-        st.metric(
-            "Day Low",
-            f"₹{stock_data['Low'].iloc[-1]:.2f}"
-        )
+        st.metric("Day Low", f"₹{stock_data['Low'].iloc[-1]:.2f}")
     
     with col4:
-        st.metric(
-            "Volume",
-            f"{stock_data['Volume'].iloc[-1] / 1e6:.2f}M"
-        )
+        st.metric("Volume", f"{stock_data['Volume'].iloc[-1] / 1e6:.2f}M")
     
     # Portfolio metrics
     if portfolio_shares > 0 and purchase_price > 0:
@@ -133,24 +117,18 @@ try:
             st.metric("Total Invested", f"₹{portfolio_cost:,.2f}")
         
         with col3:
-            color = "green" if portfolio_gain >= 0 else "red"
-            st.metric(
-                "Total Gain/Loss",
-                f"₹{portfolio_gain:,.2f}",
-                delta=f"{portfolio_gain_percent:.2f}%"
-            )
+            st.metric("Total Gain/Loss", f"₹{portfolio_gain:,.2f}", delta=f"{portfolio_gain_percent:.2f}%")
         
         with col4:
             st.metric("Shares Owned", f"{portfolio_shares:.2f}")
     
     # ─────────────────────────────────────────────
-    #  PRICE CHART WITH MOVING AVERAGES
+    #  PRICE CHART
     # ─────────────────────────────────────────────
     st.subheader("📊 Price Chart")
     
     fig = go.Figure()
     
-    # Candlestick chart
     fig.add_trace(go.Scatter(
         x=stock_data.index,
         y=stock_data['Close'],
@@ -160,7 +138,6 @@ try:
         hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Close: ₹%{y:.2f}<extra></extra>'
     ))
     
-    # 20-Day Moving Average
     if show_ma20 and len(stock_data) >= 20:
         ma20 = stock_data['Close'].rolling(window=20).mean()
         fig.add_trace(go.Scatter(
@@ -172,7 +149,6 @@ try:
             hovertemplate='<b>%{x|%Y-%m-%d}</b><br>20-Day MA: ₹%{y:.2f}<extra></extra>'
         ))
     
-    # 50-Day Moving Average
     if show_ma50 and len(stock_data) >= 50:
         ma50 = stock_data['Close'].rolling(window=50).mean()
         fig.add_trace(go.Scatter(
@@ -200,7 +176,7 @@ try:
     
     st.plotly_chart(fig, use_container_width=True)
     
-    # ───────────────��─────────────────────────────
+    # ─────────────────────────────────────────────
     #  VOLUME CHART
     # ─────────────────────────────────────────────
     if show_volume:
@@ -272,6 +248,30 @@ try:
     # ─────────────────────────────────────────────
     st.subheader("📋 Stock Statistics")
     
+    try:
+        trailing_pe = stock_info.info.get('trailingPE', 'N/A')
+        pe_str = f"{trailing_pe:.2f}" if isinstance(trailing_pe, (int, float)) else "N/A"
+    except:
+        pe_str = "N/A"
+    
+    try:
+        market_cap = stock_info.info.get('marketCap', 'N/A')
+        mc_str = f"₹{market_cap:,}" if isinstance(market_cap, (int, float)) else "N/A"
+    except:
+        mc_str = "N/A"
+    
+    try:
+        div_yield = stock_info.info.get('dividendYield', 0) * 100
+        dy_str = f"{div_yield:.2f}%"
+    except:
+        dy_str = "N/A"
+    
+    try:
+        beta = stock_info.info.get('beta', 'N/A')
+        beta_str = f"{beta:.2f}" if isinstance(beta, (int, float)) else "N/A"
+    except:
+        beta_str = "N/A"
+    
     stats = {
         "Metric": [
             "Current Price",
@@ -288,10 +288,10 @@ try:
             f"₹{stock_data['High'].max():.2f}",
             f"₹{stock_data['Low'].min():.2f}",
             f"{stock_data['Volume'].tail(20).mean() / 1e6:.2f}M",
-            f"{getattr(stock_info.info.get('trailingPE'), '__format__', lambda x: 'N/A')(f'{stock_info.info.get(\"trailingPE\", \"N/A\")}')}",
-            f"₹{stock_info.info.get('marketCap', 'N/A'):,}",
-            f"{stock_info.info.get('dividendYield', 0) * 100:.2f}%",
-            f"{stock_info.info.get('beta', 'N/A')}"
+            pe_str,
+            mc_str,
+            dy_str,
+            beta_str
         ]
     }
     
@@ -310,7 +310,7 @@ try:
     st.dataframe(recent_data, use_container_width=True)
     
     # ─────────────────────────────────────────────
-    #  COMPARISON: Multiple Stocks
+    #  COMPARISON
     # ─────────────────────────────────────────────
     st.markdown("---")
     st.subheader("🔄 Compare Multiple Stocks")
@@ -318,7 +318,7 @@ try:
     compare_symbols = st.multiselect(
         "Select stocks to compare (optional):",
         ["RELIANCE", "TCS", "INFY", "HDFC", "ICICIBANK", "WIPRO", "MARUTI"],
-        help="These are popular Indian stocks. Add any others you want to compare."
+        help="Popular Indian stocks"
     )
     
     if compare_symbols:
@@ -360,5 +360,5 @@ try:
             st.plotly_chart(fig_compare, use_container_width=True)
 
 except Exception as e:
-    st.error(f"❌ Error: {str(e)}")
-    st.info("💡 Make sure the stock symbol is correct. Example: AAPL, GOOGL, MSFT, RELIANCE, TCS")
+    st.error(f"Error: {str(e)}")
+    st.info("Make sure the stock symbol is correct. Example: AAPL, GOOGL, MSFT, RELIANCE, TCS")
