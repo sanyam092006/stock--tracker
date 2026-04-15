@@ -18,12 +18,8 @@ st.markdown("""
         border-radius: 10px;
         border: 1px solid #2a2d3a;
     }
-    .positive {
-        color: #00e5a0;
-    }
-    .negative {
-        color: #ff6b6b;
-    }
+    .positive { color: #00e5a0; }
+    .negative { color: #ff6b6b; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,14 +61,25 @@ portfolio_shares = st.sidebar.number_input(
 purchase_price = st.sidebar.number_input("Purchase Price per Share (₹):", value=0.0, min_value=0.0, step=1.0)
 
 # ─────────────────────────────────────────────
+#  HELPERS
+# ─────────────────────────────────────────────
+def normalize_yf(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    """Make yfinance output a clean single-ticker DataFrame."""
+    if isinstance(df.columns, pd.MultiIndex):
+        # Try ticker in last level (common format: OHLCV x Ticker)
+        if symbol in df.columns.get_level_values(-1):
+            return df.xs(symbol, level=-1, axis=1)
+        # Try ticker in first level (alt format: Ticker x OHLCV)
+        if symbol in df.columns.get_level_values(0):
+            return df.xs(symbol, level=0, axis=1)
+    return df
+
+# ─────────────────────────────────────────────
 #  FETCH STOCK DATA
 # ─────────────────────────────────────────────
 try:
     stock_data = yf.download(stock_symbol, period=period_map[time_period], progress=False)
-
-    # Fix MultiIndex columns if needed
-    if isinstance(stock_data.columns, pd.MultiIndex):
-        stock_data = stock_data[stock_symbol]
+    stock_data = normalize_yf(stock_data, stock_symbol)
 
     if stock_data.empty:
         st.error(f"Stock symbol '{stock_symbol}' not found. Please try another symbol.")
@@ -94,11 +101,8 @@ try:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric(
-            "Current Price",
-            f"₹{current_price:.2f}",
-            delta=f"₹{price_change:.2f} ({price_change_percent:.2f}%)" if price_change != 0 else None
-        )
+        st.metric("Current Price", f"₹{current_price:.2f}",
+                  delta=f"₹{price_change:.2f} ({price_change_percent:.2f}%)" if price_change != 0 else None)
 
     with col2:
         st.metric("Day High", f"₹{float(stock_data['High'].iloc[-1]):.2f}")
@@ -126,7 +130,8 @@ try:
             st.metric("Total Invested", f"₹{portfolio_cost:,.2f}")
 
         with col3:
-            st.metric("Total Gain/Loss", f"₹{portfolio_gain:,.2f}", delta=f"{portfolio_gain_percent:.2f}%")
+            st.metric("Total Gain/Loss", f"₹{portfolio_gain:,.2f}",
+                      delta=f"{portfolio_gain_percent:.2f}%")
 
         with col4:
             st.metric("Shares Owned", f"{portfolio_shares:.2f}")
@@ -135,7 +140,6 @@ try:
     #  PRICE CHART
     # ─────────────────────────────────────────────
     st.subheader("📊 Price Chart")
-
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
@@ -143,30 +147,21 @@ try:
         y=stock_data['Close'],
         mode='lines',
         name='Close Price',
-        line=dict(color='#00e5a0', width=2),
-        hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Close: ₹%{y:.2f}<extra></extra>'
+        line=dict(color='#00e5a0', width=2)
     ))
 
     if show_ma20 and len(stock_data) >= 20:
         ma20 = stock_data['Close'].rolling(window=20).mean()
         fig.add_trace(go.Scatter(
-            x=stock_data.index,
-            y=ma20,
-            mode='lines',
-            name='20-Day MA',
-            line=dict(color='#ffd166', width=1, dash='dash'),
-            hovertemplate='<b>%{x|%Y-%m-%d}</b><br>20-Day MA: ₹%{y:.2f}<extra></extra>'
+            x=stock_data.index, y=ma20, mode='lines',
+            name='20-Day MA', line=dict(color='#ffd166', width=1, dash='dash')
         ))
 
     if show_ma50 and len(stock_data) >= 50:
         ma50 = stock_data['Close'].rolling(window=50).mean()
         fig.add_trace(go.Scatter(
-            x=stock_data.index,
-            y=ma50,
-            mode='lines',
-            name='50-Day MA',
-            line=dict(color='#3b82f6', width=1, dash='dash'),
-            hovertemplate='<b>%{x|%Y-%m-%d}</b><br>50-Day MA: ₹%{y:.2f}<extra></extra>'
+            x=stock_data.index, y=ma50, mode='lines',
+            name='50-Day MA', line=dict(color='#3b82f6', width=1, dash='dash')
         ))
 
     fig.update_layout(
@@ -175,12 +170,7 @@ try:
         xaxis_title='Date',
         template='plotly_dark',
         hovermode='x unified',
-        height=500,
-        plot_bgcolor='#1a1d27',
-        paper_bgcolor='#0f1117',
-        font=dict(color='#e8eaf0', family='DejaVu Sans'),
-        xaxis=dict(gridcolor='#2a2d3a'),
-        yaxis=dict(gridcolor='#2a2d3a')
+        height=500
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -190,7 +180,6 @@ try:
     # ─────────────────────────────────────────────
     if show_volume:
         st.subheader("📊 Trading Volume")
-
         colors = ['#00e5a0' if stock_data['Close'].iloc[i] >= stock_data['Close'].iloc[i-1] else '#ff6b6b'
                   for i in range(1, len(stock_data))]
         colors = ['#00e5a0'] + colors
@@ -200,8 +189,7 @@ try:
             x=stock_data.index,
             y=stock_data['Volume'],
             marker_color=colors,
-            name='Volume',
-            hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Volume: %{y:,.0f}<extra></extra>'
+            name='Volume'
         ))
 
         fig_volume.update_layout(
@@ -209,13 +197,7 @@ try:
             yaxis_title='Volume',
             xaxis_title='Date',
             template='plotly_dark',
-            height=400,
-            plot_bgcolor='#1a1d27',
-            paper_bgcolor='#0f1117',
-            font=dict(color='#e8eaf0', family='DejaVu Sans'),
-            xaxis=dict(gridcolor='#2a2d3a'),
-            yaxis=dict(gridcolor='#2a2d3a'),
-            showlegend=False
+            height=400
         )
 
         st.plotly_chart(fig_volume, use_container_width=True)
@@ -224,16 +206,13 @@ try:
     #  DAILY RETURNS
     # ─────────────────────────────────────────────
     st.subheader("📈 Daily Returns Distribution")
-
     daily_returns = stock_data['Close'].pct_change() * 100
 
     fig_returns = go.Figure()
     fig_returns.add_trace(go.Histogram(
         x=daily_returns.dropna(),
         nbinsx=50,
-        marker_color='#3b82f6',
-        name='Daily Returns (%)',
-        hovertemplate='<b>Return Range:</b> %{x:.2f}%<br><b>Frequency:</b> %{y}<extra></extra>'
+        marker_color='#3b82f6'
     ))
 
     fig_returns.update_layout(
@@ -241,13 +220,7 @@ try:
         xaxis_title='Daily Return (%)',
         yaxis_title='Frequency',
         template='plotly_dark',
-        height=400,
-        plot_bgcolor='#1a1d27',
-        paper_bgcolor='#0f1117',
-        font=dict(color='#e8eaf0', family='DejaVu Sans'),
-        xaxis=dict(gridcolor='#2a2d3a'),
-        yaxis=dict(gridcolor='#2a2d3a'),
-        showlegend=False
+        height=400
     )
 
     st.plotly_chart(fig_returns, use_container_width=True)
@@ -294,69 +267,6 @@ try:
 
     df_stats = pd.DataFrame(stats)
     st.dataframe(df_stats, use_container_width=True, hide_index=True)
-
-    # ─────────────────────────────────────────────
-    #  RECENT DATA TABLE
-    # ─────────────────────────────────────────────
-    st.subheader("📅 Recent Price Data")
-
-    recent_data = stock_data.tail(10)[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
-    recent_data['Daily Change %'] = daily_returns.tail(10).values
-    recent_data = recent_data.round(2)
-
-    st.dataframe(recent_data, use_container_width=True)
-
-    # ─────────────────────────────────────────────
-    #  COMPARISON
-    # ─────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("🔄 Compare Multiple Stocks")
-
-    compare_symbols = st.multiselect(
-        "Select stocks to compare (optional):",
-        ["RELIANCE", "TCS", "INFY", "HDFC", "ICICIBANK", "WIPRO", "MARUTI"],
-        help="Popular Indian stocks"
-    )
-
-    if compare_symbols:
-        compare_data = {}
-        for symbol in compare_symbols + [stock_symbol]:
-            try:
-                data = yf.download(symbol, period="1y", progress=False)
-                if isinstance(data.columns, pd.MultiIndex):
-                    data = data[symbol]
-                normalized_price = (data['Close'] / data['Close'].iloc[0]) * 100
-                compare_data[symbol] = normalized_price
-            except:
-                pass
-
-        if compare_data:
-            fig_compare = go.Figure()
-            for symbol, prices in compare_data.items():
-                fig_compare.add_trace(go.Scatter(
-                    x=prices.index,
-                    y=prices,
-                    mode='lines',
-                    name=symbol,
-                    line=dict(width=2),
-                    hovertemplate='<b>%{x|%Y-%m-%d}</b><br>%{y:.2f}%<extra></extra>'
-                ))
-
-            fig_compare.update_layout(
-                title='Stock Performance Comparison (1 Year)',
-                yaxis_title='Normalized Price (Base = 100)',
-                xaxis_title='Date',
-                template='plotly_dark',
-                height=500,
-                plot_bgcolor='#1a1d27',
-                paper_bgcolor='#0f1117',
-                font=dict(color='#e8eaf0', family='DejaVu Sans'),
-                xaxis=dict(gridcolor='#2a2d3a'),
-                yaxis=dict(gridcolor='#2a2d3a'),
-                hovermode='x unified'
-            )
-
-            st.plotly_chart(fig_compare, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error: {str(e)}")
